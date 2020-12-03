@@ -1,0 +1,133 @@
+---
+title: "project1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) 
+library(tidyverse)
+save.image("myWorkSpace.RData")
+Happy <- read.csv("/Users/ameliamercado/Desktop/website/content/project/Happy.csv") 
+Countries <- read.csv("/Users/ameliamercado/Desktop/website/content/project/Countries.csv")  %>% mutate(Region=recode(Region, CentralAsia="Asia", EasternAsia="Asia", EasternAfrica="Africa", NorthernAfrica="Africa", EasternEurope="Europe", NorthernEurope="Europe", MiddleAfrica="Africa", "South-easternAsia" = "Asia", SouthernAfrica="Africa", WesternAfrica="Africa", WesternAsia="Asia", WesternEurope="Europe", SouthernEurope="Europe", SouthernAsia="Asia", Oceania="Asia", NorthernAmerica="Americas", SouthAmerica="Americas", CentralAmerica="Americas")) %>% mutate(SurfaceArea=as.numeric(`Surface.area..km2.`), PopulationDensity = as.numeric(`Population.density..per.km2..2017.`), Region = as.character(Region))%>% select(-`Surface.area..km2.`, -`Population.density..per.km2..2017.`)   
+```
+
+## 0. Introduction: 
+The two data sets that I chose were Happy and Countries. The Happy data set contains the Happiness Rank of a country as calculated by the World Happiness Report in 2017. Freedom represents the magnitude of freedom recorded by some measure, and Economy GDP is a scaled measure of a countries GDP in the year of 2017. The Countries data set contains the Region that a country is in, its Surface Area in km^2, and Population density as of 2017, which shows the number of inhabitants per square kilometer.  
+
+I acquired these two data sets on an online website called Kaggle, where users can upload data sets. Because I wanted to look at how the physical attributes of a country pertain to it's Happiness Rank, I thought it would be ideal to join the Happy data set with the Countries data set, which contains more geographical/population information. I suspect that countries in more developed regions, such as Europe and the Americas, will rank lower/better for happiness, and thus will also have higher GDPs and Freedom. 
+
+## 1. Tidying: Rearranging Wide/Long
+```{r} 
+Happy %>% pivot_wider(names_from = "Country", values_from="Freedom") %>% pivot_longer(3:157, names_to="Country", values_to="Freedom") %>% filter(!is.na(Freedom))  
+
+Countries %>% pivot_wider(names_from="Region", values_from="SurfaceArea") %>% pivot_longer(3:10, names_to="Region", values_to="SurfaceArea") %>% filter(!is.na(SurfaceArea))
+```
+Both data sets were already tidy, thus I needed to untidy them and re-tidy again. For the Happy data set, I first used pivot wider to create a column for every single `Country`, and the values for each column corresponded to values for `Freedom.` I then used pivot longer to place the `Country` names back into a single column, filtered out NA values, and this brought me back to my tidied data set. I followed the same process for the Countries data set, but used `Region` instead of `Country`, and `SurfaceArea` instead of `Freedom.` 
+
+## 2. Joining/Merging:  
+```{r} 
+joined <- inner_join(Happy, Countries,by=c(Country="country")) 
+glimpse(joined)
+nrow(Happy) 
+nrow(Countries)   
+anti_join(Happy, Countries, by=c(Country="country"))  
+anti_join(Countries, Happy, by=c(country="Country")) %>% glimpse()
+```
+I performed an inner join to combine the two data sets. There were 155 observations in the "Happy" data set, and 229 observations in the "Countries" data set. There were 6 observations dropped from the Happy data set, which were Taiwan Province of China, North Cyprus, Kosovo, Congo (Brazzaville), Congo (Kinshasa), and Ivory Coast. There were 80 observations dropped from the Countries data set, and most were smaller countries such as Fiji, the Bahamas, Isle of Man, etc. Because so many smaller countries were dropped, this means that the sample is not entirely representative of the world, and thus my findings will not be as generalizable as they could be. 
+
+I chose to perform an inner join to ensure that I would retain the data that had matches for countries across the two data sets; I also did not want any NAs. I believe that in order to achieve these wants, an inner join was necessary. 
+
+## 3. Wrangling: 
+```{r}  
+#Mutating a Variable that is dependent on another variable 
+joined2 <- joined %>%  mutate(KmPerPerson = SurfaceArea/PopulationDensity) %>% mutate(KmPerPerson=as.numeric(KmPerPerson))
+
+#Mean, SD, Min, Max, and Distinct Values (no grouping)
+joined2 %>% select(-Happiness.Rank) %>% summarize_if(is.numeric, c(mean=mean, sd=sd, min=min, max=max, distinct=n_distinct)) %>% pivot_longer(1:25, names_to="Var", values_to="Value") %>% separate(Var, into=c("Var", "Stat"))
+
+#Grouped by Top Half Vs. Bottom Half 
+joined2 %>% mutate(TopHalf=Happiness.Rank==1:75) %>% select(-Region) %>% group_by(TopHalf) %>% summarize_at(3:6, c(mean=mean, sd=sd, min=min, max=max)) %>% pivot_longer(2:17, names_to="Var", values_to="Value") %>% separate(Var, into=c("Var", "Stat")) 
+ 
+#Grouped by region  
+joined2  %>% group_by(Region) %>% summarize_if(is.numeric,c(mean=mean, sd=sd)) %>% pivot_longer(-Region) %>% pivot_wider(names_from=Region, values_from=value) %>% separate(name, into=c("var", "stat"), sep="_") 
+  
+#Grouped by Top Half and Grouped by Region  
+joined2 %>% filter(Happiness.Rank==1:75) %>% group_by(Region) %>% summarize_if(is.numeric, c(mean=mean, sd=sd)) %>% pivot_longer(2:11, names_to="Var", values_to="Value") %>% pivot_wider(names_from = Region, values_from=Value) %>% separate(Var, into=c("Var", "stat"), sep="_")
+  
+#Correlation Matrix  
+cormat <- joined %>% select(-Country, -Region) %>% mutate_if(is.double, as.numeric)%>% cor(use="pair")  %>% as.data.frame() %>% rownames_to_column("Variable1") %>% pivot_longer(2:6, names_to="Variable2", values_to="correlation")   
+head(cormat)  
+```
+Initially, I made a variable called `KmPerPerson`, which divided `SurfaceArea` by `PopulationDensity`. I then worked to find the mean, standard deviation, minimum, maximum, and distinct values of all numeric variables except `Happiness.Rank`, as I found computing summary statistics for this variable redundant. What stuck out to me at first was initially how spread out `SurfaceArea` was (2.15e+06 km^2), the fact that `Freedom` and `EconomyGDP` had minimums of 0 (honestly, quite sad), and lastly, all numeric variables, except `PopulationDensity` had values that were all unique from one another (149, which is equivalent to the rows in the joined data set).  
+
+When the countries were grouped by top half and bottom half for `Happiness.Rank` and while comparing the means for `Freedom` and `EconomyGDP`, the means were all lower in the bottom half and more spread out as well. When the countries were grouped by `Region`, it was evident that Europe had on average, the countries with the lowest/best `Happiness.Rank` (47), and the Caribbean, on average, had countries with the highest/worst `Happiness.Rank`(86). Lastly, when filtered for top half and grouped by `Region`, the most striking result was that there was no summary stats for Africa and the Caribbean, meaning that there were no African or Caribbean countries that ranked in the Top Half for `Happiness.Rank`. Lastly, I created a correlation matrix, which is visualized in the next section. Some of the highest correlations were `Happiness.Rank` and `EconomyGDP` (-0.81) and `Happiness.Rank` and `Freedom` (-0.56). Some of the lowest correlations were `Happiness.Rank` and `PopulationDensity` (-0.096), `Freedom` and `Surface Area` (0.06), and `PopulationDensity`and `Freedom` (0.12). 
+
+## 4. Visualizing
+```{r}   
+library(wesanderson)
+#Correlation HeatMap
+ggplot(cormat, aes(x=Variable1, y=Variable2, fill=correlation)) + geom_tile() +scale_x_discrete(labels=c("EconomyGDP"="GDP", "Happiness.Rank"="Rank", "PopulationDensity"="PopDensity"))+scale_y_discrete(labels=c("EconomyGDP"="GDP", "Happiness.Rank"="Rank", "PopulationDensity"="PopDensity")) + scale_fill_gradient(low = "#ffffff", high = "#E75480")
+
+#Plot 1 
+ggplot(joined, aes(Happiness.Rank, Freedom)) +geom_point(aes(color=Region))+ theme_linedraw()+ggtitle("Freedom by Rank, Colored by Region") + xlab("Happiness Rank ")+scale_color_manual(values=wes_palette(n=5, name="Darjeeling2")) + scale_x_continuous(breaks=c(0,25,50,75,100,125,150))
+
+#Plot 2
+ggplot(joined2, aes(x=Region, y=EconomyGDP)) +geom_bar(stat="summary", fun=mean)+geom_jitter(aes(color=Freedom), size=2)+scale_color_gradient(low = "#66ff00", high = "#ff0000")+ggtitle("Mean EconomyGDP by Region, Colored by Freedom")+theme_linedraw()    
+```
+
+My correlation heat map shows that `Happiness.Rank` and `EconomyGDP`, as well as `Happiness.Rank` and `Freedom` are strongly negatively correlated. The negative value for these correlations is not surprising, as the numerically lower the rank, the better. And so, lower/better ranks have higher scores of `Freedom` and measures of `EconomyGDP.` My heat map also shows that some variables nearly have a correlation of zero with one another, such as `PopulationDensity` and `EconomyGDP`, as well as `SurfaceArea` and `EconomyGDP.` 
+
+Plot 1 is scatter plot of `Freedom` by `Happiness.Rank`, and the points are colored by `Region.` From this plot, it is evident that when looking at the spread of `Region`, Africa tends to have worse ranks for Happiness, and Europe seems to have  better ranks for Happiness. It also appears that having more freedom is inversely related to `Happiness.Rank`, i.e. the higher `Freedom` then the lower the `Happiness.Rank`. This is line from what was observed from the correlation heat map. `Freedom` also becomes more spread out as the `Happiness.Rank` increases. 
+
+Plot 2 is a bar graph of average `EconomyGDP` by `Region`, with points that are colored by `Freedom.` From this plot, it is evident that Europe, on average, has a higher `EconomyGDP` than other `Regions.` It is also evident that Africa, on average, has a lower `EconomyGDP` than other `Regions.` When looking at `Freedom`, Africa has the most brightly colored green dots, meaning that this region has many countries with low values for `Freedom.` Asia, probably has the largest range for `Freedom` values, as the dots appear to be scattered across almost the entire graph. 
+
+
+## 5. Dimensionality Reduction
+```{r}  
+library(cluster)
+#Calculating Gower Dissimilarities 
+data <- joined2 %>% mutate_if(is.character, as.factor) %>% mutate_if(is.double, as.numeric) %>% column_to_rownames("Country")
+gower <- daisy(data, metric="gower")
+ 
+#Finding ideal cluster number 
+sil_width<-vector()
+for(i in 2:10){  
+  pam_fit <- pam(gower, k = i)  
+  sil_width[i] <- pam_fit$silinfo$avg.width  
+}
+ggplot()+geom_line(aes(x=1:10,y=sil_width))+scale_x_continuous(name="k",breaks=1:10)  
+
+#Performing clustering with PAM
+pam2 <- pam(gower, k=4, diss=T)  
+data2 <- joined %>% mutate(cluster=pam2$clustering)
+pam2$silinfo$avg.width
+
+#Most Similar and Most Different 
+gower %>% as.matrix %>% as.data.frame %>% rownames_to_column("Country") %>%
+  pivot_longer(-1,values_to="Distance") %>%
+  filter(Country!=name) %>% filter(Distance%in%c(min(Distance),max(Distance))) %>% distinct(Distance,.keep_all = T) 
+
+#What is the most representative? 
+data2 %>% slice(pam2$id.med)  
+   
+#What do the clusters look like?
+data2 %>% select(cluster, Region) %>% group_by(cluster, Region) %>% summarize(n=n()) %>% mutate(proportion=n/sum(n, na.rm=T)) 
+
+data2 %>% group_by(cluster) %>% summarize_if(is.numeric,.funs=list("mean"=mean, "median"=median, "sd"=sd), na.rm=T) %>% pivot_longer(contains("_")) %>% separate(name, sep="_", into=c("variable", "stat")) %>% pivot_wider(names_from="variable", values_from="value") %>% arrange(stat)
+  
+#Visualization:  
+library(GGally)   
+data3 <- data2 %>% relocate(Region, .before=Happiness.Rank)
+ggpairs(data3,columns= 3:7,aes(color=as.factor(cluster)))
+```
+
+Clustering: 
+
+Because I wanted to include a categorical variable in my clustering, I used gower dissimilarities to perform clustering with PAM. First, I changed my categorical variable to a factor, and then also ensured that my numeric variables were indeed numeric in R. After this, I then calculated gower dissimilarities for my data.  Next, I worked to decide the ideal amount of clusters that would maximize my average silhouette width. Maximizing average silhouette width is important because it means that the clusters are more cohesive and more separate from one another. My max average silhouette width was 0.527, which fell at k=4. An average silhouette width of 0.527 indicates that a reasonable structure has been found. Thus, my ideal amount of clusters was 4. I then performed clustering with PAM, with k equaling four, and saved this as pam2.
+
+Analysis: 
+
+To analyze my clusters, I first found those that were the most similar and most different. The most similar countries in my data set are Denmark and Iceland, and the least similar are Canada and Burundi. The later is logical, as Canada is a developed country and Burundi an extremely poor, underdeveloped country. I also found what countries were most representative of each cluster; I did this by looking at the final medoids, and because I used PAM, each medoid is an actual data point. Each medoid represented a different region, which I thought indicated that my clusters were pretty separate from one another. To determine what the clusters looked like, I found proportions of each cluster assignment by region. Cluster 2 was purely just comprised of the Americas while clusters 1,3, and 4 all had some tiny proportion of the Caribbean. I also calculated summary statistics, which produced a lot of information about each cluster. Most interestingly, cluster 2 had on average, the lowest/best ranks for Happiness, the lowest median, and was less spread out than the other clusters.  
+
+Lastly, I created a visualization to show all pairwise combinations for the four numeric variables. Looking at this visualization, `EconomyGDP` and `Happiness.Rank` have the highest correlation with one another, which is consistent with the correlation heat map. `SurfaceArea` and `Freedom` have the lowest correlation, which is also consistent with the correlation heatmap. 
+

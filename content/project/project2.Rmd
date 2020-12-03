@@ -1,0 +1,221 @@
+---
+title: 'project2'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing Data + Loading libraries/functions
+```{r}
+library(tidyverse); library(glmnet); library(rstatix); library(sandwich); library(lmtest);library(plotROC); library(interactions)
+data <- read.csv("/Users/ameliamercado/Desktop/website/content/project/heart.csv")  %>% rename(max=thalach) %>% mutate(sex=as.factor(sex)) %>% mutate(fbs=as.factor(fbs)) %>% mutate(exang=as.factor(exang)) %>% mutate(cp=as.factor(cp)) %>% mutate(slope=as.factor(slope)) %>% mutate(ca=as.factor(ca)) %>% mutate(thal=as.factor(thal)) %>% mutate(target=as.factor(target))
+class_diag<-function(probs,truth){
+  tab<-table(factor(probs>.5,levels=c("FALSE","TRUE")),truth)
+  acc=sum(diag(tab))/sum(tab)
+  sens=tab[2,2]/colSums(tab)[2]
+  spec=tab[1,1]/colSums(tab)[1]
+  ppv=tab[2,2]/rowSums(tab)[2]
+  f1=2*(sens*ppv)/(sens+ppv)
+
+  if(is.numeric(truth)==FALSE & is.logical(truth)==FALSE){
+    truth<-as.numeric(truth)-1}
+  
+  #CALCULATE EXACT AUC
+  ord<-order(probs, decreasing=TRUE)
+  probs <- probs[ord]; truth <- truth[ord]
+  
+  TPR=cumsum(truth)/max(1,sum(truth)) 
+  FPR=cumsum(!truth)/max(1,sum(!truth))
+  
+  dup<-c(probs[-1]>=probs[-length(probs)], FALSE)
+  TPR<-c(0,TPR[!dup],1); FPR<-c(0,FPR[!dup],1)
+  
+  n <- length(TPR)
+  auc<- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+
+  data.frame(acc,sens,spec,ppv,f1,auc)
+}
+
+```
+## 0. Data 
+```{r}
+head(data)  
+nrow(data)
+```
+This dataset was pulled from the Cleveland Heart Disease dataset from the UCI repository. Each row represents a patient and some metrics/demographic information associated with them; the goal of this dataset I believe is to provide information about those who do and do not have heart disease. The `age` variable represents age in years, `trestbps` represent resting blood pressure in mmHg, `chol` represents cholesterol in mg/dl, `max` represents maximum heart rate during exercise, and `oldpeak` represents ST depression induced by exercise relative to rest on an ECG. Some of the categorical variables are `sex`, which represents sex (0=male, 1=female), `cp`, which represents chest pain type (0=typical angina, 1= atypical angina, 2= nonanginal pain, 3=asymptotic), `thal`, which represents the results from a thallium test (0=normal, 1=fixed defect, 2=reversible defect), `target`, which represents those who have heart disease (1=yes, 0=no), and lastly, `exang`, which represents exercise induced angina (1=yes, 0=no). There are 303 observations. 
+
+## 1. MANOVA  
+```{r} 
+man <- manova(cbind(age, trestbps, chol, max, oldpeak) ~ cp, data=data); summary(man) # 1 test
+summary.aov(man) #5 tests
+pairwise.t.test(data$age, data$cp, p.adj="none") #6 tests
+pairwise.t.test(data$trestbps, data$cp, p.adj="none") #6 tests
+pairwise.t.test(data$max, data$cp, p.adj="none") #6 tests
+pairwise.t.test(data$oldpeak, data$cp, p.adj="none") #6 tests
+1-.95^(30) #type 1 error rate
+.05/30 #Bonferroni correction 
+
+#Checking MANOVA assumptions 
+group <- data$cp
+DVs <- data %>% select(age, trestbps, chol, max)
+sapply(split(DVs,group), mshapiro_test)
+```
+Based on our MANOVA, significant differences were found among the three levels of chest pain for at least one of the dependent variables. As a follow-up test, univariate ANOVAs for each dependent variable were conducted. The univariate ANOVAs for `age` (p=0.02), `trestbps`(p=0.03), `max`(p<.001), and `oldpeak`(p<0.001) were all significant. Post hoc analysis was conducted via pairwise comparisons to determine which levels of `cp` differed for `age`, `trestbps`, `max`, and `oldpeak`. We conducted a total of 30 tests, which yielded a type I error rate of 0.785 and a bonferroni adjusted significance of 0.0017. 
+
+In post-hoc analysis, for  `age` and `trestbps` nothing was found to be significant between all `cp` groups. A `cp` level of 0 showed a significant mean `max` difference from a `cp` level of 1 (p<0.0001) and a level of 2 (p<0.0001). A `cp` level of 0 showed a significant `oldpeak` mean difference from a `cp` level of 1 (p<0.0001) and 2 (p<0.0001). 
+
+While checking assumptions for MANOVA, we worked to see if the multivariate normality of DVs assumption was met. We ran a Shapiro-Wilk test to check this, and we had at 4 p-values that were less than .05, which meant we could reject the null hypothesis and the multivariate normality of DVs assumption was not met. 
+
+## 2. Randomization test  
+```{r}   
+set.seed(1234) 
+rand <- vector() 
+for(i in 1:5000){
+new<-data.frame(chol=sample(data$chol),exang=data$exang) 
+rand[i]<-mean(new[new$exang==0,]$chol)-   
+              mean(new[new$exang==1,]$chol)}  
+data%>%group_by(exang)%>%summarize(means=mean(chol))%>%summarize(`mean_diff`=diff(means)) 
+mean(rand>7.394385| rand< -7.394385)
+{hist(rand,main="Null Distribution and Test Statistic",ylab="Frequency", xlab="rand_exang"); abline(v = c(-7.394385	, 7.394385),col="red")}   
+t.test(data=data, chol~exang) 
+```
+We decided to perform a permutation test to compare mean cholesterol between those who have exercise induced angina and those who do not. Our null hypothesis was that the mean cholesterol is the same for those who have exercise induced angina vs. those who do not. Our alternative hypothesis was that the mean cholesterol is different for those who have exercise induced angina vs. those who do not. The observed cholesterol difference in means was 7.394 mg/dl, which means that those who had exercise induced angina on average had cholesterol that was 7.3943 higher than those who do not; this value was considered the test statistic.  
+
+The probability (p-value) of getting a mean difference as extreme as the one we got under our randomization distribution was 0.2352. Thus, we fail to reject the null hypothesis and cannot state that there is a significant mean difference for cholesterol between those who have exercise induced angina and those who do not. We also created a plot visualizing the null distribution and the test statistic. Our plot is consistent with our findings, considering our test statistic is near the center of the distribution. Lastly, we checked our results from the randomization test with an independent t-test, and arrived at the same conclusion (p=0.234). 
+
+## 3. Linear regression model   
+```{r} 
+#Model 
+data$age_c <- (data$age -mean(data$age))
+fit <- lm(trestbps ~ sex * age_c, data=data)
+summary(fit)  
+#Plotting the regression  
+#Plot 1
+data %>% ggplot(aes(age_c, trestbps, color=sex)) +geom_point() +geom_smooth(method="lm", se=F)
+#Plot 2 ( I thought both looked cool! )
+interact_plot(fit,age_c,sex)
+#Checking assumptions (linearity)
+resids<-fit$residuals
+fitvals<-fit$fitted.values 
+data.frame(resids,fitvals)%>%ggplot(aes(fitvals,resids))+geom_point()+geom_hline(yintercept=0, color='red')  
+#Checking assumptions(homoskedasticity)
+bptest(fit)
+#Checking assumptions (normality)
+shapiro.test(resids)
+#Recomputing regression with robust standard errors
+coeftest(fit, vcov = vcovHC(fit))
+#Adjusting R-squared
+(sum((data$trestbps-mean(data$trestbps))^2)-sum(fit$residuals^2))/sum((data$trestbps-mean(data$trestbps))^2) 
+```
+132.2388 is the predicted resting BP for males with an average age. For people with an average age, females have a predicted resting BP that is 1.0022 lower than males. For every 1-unit increase in age, predicted resting BP increases by 0.6443. Slope of age on BP for females is 0.1677 lower than for males.  
+
+While checking for assumptions, we first checked for linearity; our plot of residuals vs. fitted values appeared to have some funneling, which meant we did not meet the linearity assumption. We ran a bptest to check for homoskedasticity, and arrived at a p-value of 0.028. The null hypothesis for our bptest was that the data was homoskedastic; because we were able to reject the null hypothesis, we failed to meet the homoskedastic assumption. To check for normality, we ran a Shapiro-Wilk test, which yielded a p-value <0.001. The null hypothesis for our Shapiro-Wilk test was that hte data was normal; because we were able to reject the null hypothesis, we failed to meet the normality assumption. 
+
+Next, we recomputed our regression results with robust standard errors by using `coeftest.` Even after computing for robust SEs, age_c still had a significant effect on resting BP. Our R-squared was 0.08058, and after adjusting, it was was 0.08058 (the same). Thus, 8.06% of the variability in resting BP is explained by our model. 
+
+## 4. Bootstrap SEs 
+```{r} 
+#Model
+resids<-fit$residuals
+fitted<-fit$fitted.values 
+set.seed(1234)
+resid_resamp<-replicate(5000,{
+  new_resids<-sample(resids,replace=TRUE) 
+  data$new_y<-fitted+new_resids 
+  fit<-lm(new_y ~ sex * age_c ,data=data) 
+  coef(fit) 
+})
+resid_resamp %>% t %>% as.data.frame %>% summarize_all(sd)
+resid_resamp %>% t %>% as.data.frame %>% pivot_longer(1:4) %>% group_by(name) %>% summarize(lower=quantile(value, 0.025), upper=quantile(value, 0.95))  
+```
+Comparing the original SEs to the bootstrap SEs , sex1 changed from 2.10 to 2.12, age_c changed from 0.184 to 0.182, and the interaction changed from 0.227 to 0.225. The differences were thus small. Comparing the robust SEs to the bootstrap SEs, sex1 changed from 2.16 to 2.12, age_c changed from 0.19 to 0.18, and the interaction changed from 0.229 to 0.225. Due to little change in SEs, it is reasonable to conclude that the p-values more or less stayed the same as well. When computing a 95% CI for the bootstrap SEs, age_c was the only significant variable because 0 was not in the CI, which was consistent with the findings from the original and robust SEs.    
+
+## 5. Logistic regression  
+```{r}    
+#Model 
+fit2 <- glm(sex~trestbps+chol, data=data, family="binomial"); summary(fit2); exp(coef(fit2))
+probs<-predict(fit2,type="response")   
+probs <- as.numeric(probs)   
+#Confusion Matrix 
+table(predict=as.numeric(probs>.5),truth=data$sex)%>%addmargins 
+#In-sample classification diagnostics
+class_diag(probs, data$sex) 
+
+#Density Plot
+data$logit<-predict(fit2, type="link")
+data %>% ggplot(aes(logit, fill=sex))+geom_density(alpha=.3)+
+  geom_vline(xintercept=0,lty=2)
+
+#ROC Curve
+data$sex2 <- as.numeric(data$sex)
+ROCplot<-ggplot(data)+geom_roc(aes(d=sex2,m=probs), n.cuts=0); ROCplot; calc_auc(ROCplot) 
+```
+Odds of being female when `trestbps`=0 and `chol`=0 is 28.02. While controlling for `chol`, for every 1-unit increase in `trestbps`, odds of being female increase by a factor of 0.996 (p=0.57). While controlling for `trestbps`, for every 1-unit increase in `chol`, odds of being female increase by a factor of 0.992 (p=0.001).  
+
+The accuracy is 0.706, sensitivity is 0.99, the specificity is 0.09, the precision is 0.702, and the AUC is 0.597. Accuracy and precision are not ideal, as they are both pretty low. The sensitivity is higher than the specificity, meaning that the model is predicting true values better than false values. The AUC is 0.597, which is classified as bad.  Our AUC makes sense when looking at the ROC curve, which is nearly linear. When looking at our density plot of the log-odds, the gray area represents mis-classification, and there is a lot of gray. Our AUC/ROC curve as well as our density plot show that this is not the best model. 
+
+## 6. Logistic Regression w/ the rest of variables 
+```{r}   
+#Model 
+data2 <- data %>% select(-sex2) %>% select(-age_c) %>% select(-logit)
+fit <- glm(sex ~., data=data2, family="binomial")
+probs <- predict(fit, type="response") 
+#Confusion Matrix 
+table(predict=as.numeric(probs>.5),truth=data$sex)%>%addmargins  
+#In-sample classification diagnostics
+class_diag(probs, data2$sex) 
+
+#10 fold CV 
+k=10
+data <- data2 %>% sample_frac 
+folds <- ntile(1:nrow(data),n=10) 
+
+diags<-NULL
+set.seed(1234)  
+for(i in 1:k){
+  train <- data[folds!=i,] 
+  test <- data[folds==i,] 
+  truth <- test$sex 
+  
+  fit <- glm(sex~., data=train, family="binomial")
+  probs <- predict(fit, newdata=test, type="response")
+  
+  diags<-rbind(diags,class_diag(probs,truth))
+}
+
+summarize_all(diags,mean) 
+
+#LASSO 
+y <- as.matrix(data2$sex) 
+preds <- model.matrix(sex~., data=data2) [,-1] 
+preds <- scale(preds)  
+cv <- cv.glmnet(preds, y, family="binomial") 
+lasso_fit<-glmnet(preds,y,family="binomial",lambda=cv$lambda.1se) 
+coef(lasso_fit) 
+
+#10 fold CV w/ LASSO variables 
+data3 <- data2 %>% mutate(thal2 = ifelse(data2$thal==2, 1, 0))
+data <- data3 %>% sample_frac 
+folds <- ntile(1:nrow(data),n=10) 
+diags<-NULL
+set.seed(1234)  
+for(i in 1:k){
+  train <- data[folds!=i,] 
+  test <- data[folds==i,] 
+  truth <- test$sex 
+  
+  fit <- glm(sex~age + chol+thal2+target, 
+             data=train, family="binomial")
+  probs <- predict(fit, newdata=test, type="response")
+  
+  diags<-rbind(diags,class_diag(probs,truth))
+}
+diags%>%summarize_all(mean)
+```
+For the normal-theory model, the accuracy is 0.77, the sensitivity is 0.86, the specificity is 0.58, the precision is 0.82, and the AUC is 0.84. Accuracy and precision are not ideal, but are a little higher than the model from the previous question. The sensitivity is higher than the specificity, which indicates that this model is better at predicting true values than false ones. The AUC is better than the previous question and is now classified as good. 
+
+When performing a 10-fold CV with the same model, the accuracy is 0.75, sensitivity is 0.85, specificity is 0.56, precision is 0.80, and the AUC is 0.78. Accuracy, precision, specificity, and sensitivity all decrease when compared to the previous model. AUC decreases from the previous model as well, which is a sign of over-fitting. The AUC in this model is considered fair. 
+
+LASSO was then performed to determine which coefficient estimates are non-zero, which were `age`, `chol`, `thal` (level 2), and `target`. We recoded for the `thal` level 2 and created a binary variable called `thal2`, where 1 = `thal` was 2, and 0 = `thal` was anything but 2. Using these retained variables we performed a 10-fold CV. The AUC of this model was 0.783, which is classified as fair. Based on all of these models, the best was our first model (normal-theory), since this has the highest AUC (0.84). 
