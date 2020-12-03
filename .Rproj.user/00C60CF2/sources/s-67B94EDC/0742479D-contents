@@ -12,7 +12,7 @@ theme = "hugo-sustain"
 
 [params]
   avatar = "profile.png"
-  author = "Amelia Mercadi"
+  author = "Amelia Mercado"
   occupation = "Software Engineer"
   about = "I love all things computer science and maths."
 
