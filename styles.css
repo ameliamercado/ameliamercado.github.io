@@ -1,0 +1,325 @@
+:root {
+    --bg-color: #fbf9f4;
+    /* light cream */
+    --text-primary: #1e1e1e;
+    /* dark text */
+    --text-secondary: #555555;
+    --accent: #5e6b54;
+    --border: #e3dec9;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+}
+
+a {
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: var(--accent);
+}
+
+.layout {
+    display: flex;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 5%;
+}
+
+.sidebar {
+    width: 250px;
+    padding: 8rem 2rem 4rem 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-pic {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1.5rem;
+    background-color: var(--border);
+    /* Placeholder background */
+}
+
+.brand h1 {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+    letter-spacing: -0.02em;
+}
+
+.nav ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.nav a {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    position: relative;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.nav a:hover,
+.nav a.active {
+    color: var(--text-primary);
+}
+
+.content {
+    flex: 1;
+    padding: 8rem 0 4rem 4rem;
+}
+
+.section {
+    margin-bottom: 6rem;
+}
+
+.section h2 {
+    font-size: 1.8rem;
+    margin-bottom: 2rem;
+    letter-spacing: -0.02em;
+}
+
+.section-content {
+    font-size: 1.05rem;
+    color: var(--text-primary);
+    font-weight: 300;
+}
+
+.section-content p {
+    margin-bottom: 1.5rem;
+}
+
+.affiliations {
+    display: flex;
+    gap: 3rem;
+    margin-top: 3rem;
+    align-items: center;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline mandatory;
+    padding-bottom: 1.5rem;
+    list-style: none;
+    /* In case any items are li */
+    scrollbar-width: thin;
+}
+
+.affiliations::-webkit-scrollbar {
+    height: 8px;
+}
+
+.affiliations::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.affiliations::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.affiliation-item {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+}
+
+.affiliation-logo {
+    max-height: 50px;
+    width: auto;
+    object-fit: contain;
+    opacity: 0.7;
+    filter: grayscale(100%);
+    transition: all 0.3s ease;
+    border-radius: 4px;
+    /* slightly less rounded out effect */
+}
+
+.affiliation-logo:hover {
+    opacity: 1;
+    filter: grayscale(0%);
+}
+
+.item-list {
+    list-style: none;
+}
+
+.item-list li {
+    display: flex;
+    margin-bottom: 1rem;
+    gap: 2rem;
+}
+
+#honors .item-list li {
+    margin-bottom: 0.25rem;
+}
+
+.year {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    min-width: 50px;
+    font-weight: 500;
+}
+
+.details h3 {
+    font-size: 1.15rem;
+    margin-bottom: 0.25rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+}
+
+#honors .year {
+    font-weight: 300 !important;
+    font-size: 0.85rem !important;
+}
+
+#honors p.authors,
+#honors p.venue {
+    font-weight: 300 !important;
+    font-size: 0.85rem !important;
+}
+
+.details h3 a {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+}
+
+.authors {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+}
+
+.venue {
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.venue i {
+    font-style: italic;
+}
+
+.links {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.links a {
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.links a:hover {
+    background-color: var(--text-primary);
+    color: var(--bg-color);
+}
+
+.course {
+    margin-bottom: 2rem;
+}
+
+.course h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+}
+
+ul {
+    margin-left: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.email-link {
+    font-size: 1.2rem;
+    font-family: 'DM Sans', sans-serif;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    font-weight: 500;
+}
+
+.social-links {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.social-links a {
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+@media (max-width: 768px) {
+    .layout {
+        flex-direction: column;
+        padding: 0 2rem;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        padding: 4rem 0 2rem 0;
+    }
+
+    .nav ul {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    .content {
+        padding: 2rem 0;
+    }
+
+    .item-list li {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
